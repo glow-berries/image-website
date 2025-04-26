@@ -1,4 +1,0 @@
-Flask>=2.0
-google-cloud-storage>=2.0
-python-dotenv>=0.15
-Flask-Cors>=3.0  # For handling requests from frontend domain

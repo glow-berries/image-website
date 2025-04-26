@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Uploader & Viewer</title>
     <style>
+        /* Your CSS styles remain the same */
         body {
             font-family: sans-serif;
             margin: 20px;
@@ -28,6 +29,7 @@
         button {
             padding: 8px 15px;
             cursor: pointer;
+            margin-right: 10px; /* Add some margin */
         }
 
         .image-container {
@@ -41,6 +43,7 @@
             height: auto;
             border: 1px solid #eee;
             border-radius: 3px;
+            cursor: pointer; /* Indicate they are clickable */
         }
 
         #image-list {
@@ -51,10 +54,22 @@
         #image-list li {
             margin-bottom: 5px;
         }
+        #image-list li a {
+            cursor: pointer;
+            text-decoration: underline;
+            color: blue;
+        }
 
-        #message {
+
+        #upload-message, #display-message, #list-message {
             margin-top: 10px;
             font-weight: bold;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
         }
     </style>
 </head>
@@ -71,89 +86,185 @@
 
     <section id="display-section">
         <h2>Display Images</h2>
+         <button onclick="retrieveImages()">Refresh Displayed Images</button>
+        <p id="display-message"></p>
         <div id="image-container" class="image-container">
             </div>
-        <p>To display images, you'll need to fetch their URLs from your backend (which interacts with Google Cloud Storage) and dynamically add &lt;img&gt; tags here using JavaScript.</p>
     </section>
 
     <section id="list-section">
-        <h2>Stored Images</h2>
+        <h2>Stored Images List</h2>
+        <button onclick="listStoredImages()">Refresh Stored List</button>
+        <p id="list-message"></p>
         <ul id="image-list">
             </ul>
-        <p>This section would typically involve fetching a list of stored image metadata from your backend and displaying it here. Clicking on a link could then display the image in the "Display Images" section.</p>
     </section>
 
     <script>
+        const API_BASE_URL = 'http://localhost:5000'; // Your Flask backend URL
+
+        function showMessage(elementId, text, isError = false) {
+            const el = document.getElementById(elementId);
+            el.textContent = text;
+            el.className = isError ? 'error' : 'success';
+        }
+
+        function clearMessage(elementId) {
+             const el = document.getElementById(elementId);
+             el.textContent = '';
+             el.className = '';
+        }
+
+
         function uploadImage() {
             const fileInput = document.getElementById('image-upload');
             const file = fileInput.files[0];
-            const uploadMessage = document.getElementById('upload-message');
+            const uploadMessageEl = document.getElementById('upload-message');
 
-            if (file) {
-                uploadMessage.textContent = 'Uploading...';
-                // In a real application, you would send this 'file' to your backend
-                // using a fetch or XMLHttpRequest request.
-                // Your backend would then handle the upload to Google Cloud Storage.
-
-                // For this frontend example, we'll simulate a successful upload.
-                setTimeout(() => {
-                    uploadMessage.textContent = `Successfully selected: ${file.name} (Size: ${file.size} bytes). Now, the backend needs to handle the actual upload to Google Cloud Storage.`;
-                    fileInput.value = ''; // Clear the input
-                }, 1500);
-            } else {
-                uploadMessage.textContent = 'Please select an image file.';
+            if (!file) {
+                showMessage('upload-message', 'Please select an image file.', true);
+                return;
             }
+
+            showMessage('upload-message', 'Uploading...');
+            const formData = new FormData();
+            formData.append('image', file); // Key 'image' must match Flask request.files key
+
+            fetch(`${API_BASE_URL}/api/upload`, {
+                method: 'POST',
+                body: formData, // Send file data
+            })
+            .then(response => {
+                if (!response.ok) {
+                    // Try to get error message from backend JSON response
+                    return response.json().then(err => {
+                         throw new Error(err.error || `HTTP error! status: ${response.status}`);
+                    }).catch(() => {
+                        // Fallback if response is not JSON or has no error field
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showMessage('upload-message', data.message || 'Upload successful!');
+                fileInput.value = ''; // Clear the input
+                // Optionally refresh lists/display after successful upload
+                retrieveImages();
+                listStoredImages();
+            })
+            .catch(error => {
+                console.error('Upload Error:', error);
+                showMessage('upload-message', `Upload failed: ${error.message}`, true);
+            });
         }
 
-        // In a real application, this function would fetch the list of image URLs
-        // from your backend and dynamically add <img> tags to the 'image-container' div.
         function retrieveImages() {
-            // Example of how you might fetch data (replace with your actual backend endpoint)
-            fetch('/api/images') // Replace with your backend API endpoint
-                .then(response => response.json())
-                .then(data => {
-                    const imageContainer = document.getElementById('image-container');
-                    imageContainer.innerHTML = ''; // Clear previous images
-                    data.forEach(imageUrl => {
-                        const img = document.createElement('img');
-                        img.src = imageUrl;
-                        imageContainer.appendChild(img);
+            const imageContainer = document.getElementById('image-container');
+            const displayMessageEl = document.getElementById('display-message');
+            showMessage('display-message', 'Loading images...');
+            imageContainer.innerHTML = ''; // Clear previous images
+
+            fetch(`${API_BASE_URL}/api/images`) // Use the correct endpoint
+                .then(response => {
+                    if (!response.ok) {
+                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
+                    }
+                    return response.json();
+                 })
+                .then(imageUrls => {
+                    clearMessage('display-message');
+                    if (imageUrls.length === 0) {
+                         showMessage('display-message', 'No images found in storage.');
+                         return;
+                    }
+                    imageUrls.forEach(imageUrl => {
+                        if (imageUrl) { // Check if URL is valid/provided
+                            const img = document.createElement('img');
+                            img.src = imageUrl;
+                            img.alt = "Stored Image"; // Add alt text
+                            img.onerror = () => { // Basic error handling for broken images
+                                img.alt = "Image failed to load";
+                                img.style.border = "1px solid red";
+                            };
+                            img.onclick = () => window.open(imageUrl, '_blank'); // Open full image in new tab
+                            imageContainer.appendChild(img);
+                        }
                     });
                 })
                 .catch(error => {
                     console.error('Error fetching images:', error);
-                    document.getElementById('image-container').textContent = 'Failed to load images.';
+                    showMessage('display-message', `Failed to load images: ${error.message}`, true);
                 });
         }
 
-        // Similarly, this function would fetch a list of stored image metadata
-        // from your backend and populate the 'image-list' ul.
         function listStoredImages() {
-            // Example of how you might fetch the list (replace with your actual backend endpoint)
-            fetch('/api/list-images') // Replace with your backend API endpoint
-                .then(response => response.json())
-                .then(data => {
-                    const imageList = document.getElementById('image-list');
-                    imageList.innerHTML = ''; // Clear previous list
-                    data.forEach(imageInfo => {
-                        const listItem = document.createElement('li');
-                        const link = document.createElement('a');
-                        link.href = imageInfo.url; // Or a dedicated view page
-                        link.textContent = imageInfo.name || imageInfo.filename;
-                        listItem.appendChild(link);
-                        imageList.appendChild(listItem);
+            const imageList = document.getElementById('image-list');
+            const listMessageEl = document.getElementById('list-message');
+            showMessage('list-message', 'Loading image list...');
+            imageList.innerHTML = ''; // Clear previous list
+
+            fetch(`${API_BASE_URL}/api/list-images`) // Use the correct endpoint
+                .then(response => {
+                     if (!response.ok) {
+                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
+                    }
+                    return response.json();
+                 })
+                .then(imageInfoList => {
+                     clearMessage('list-message');
+                    if (imageInfoList.length === 0) {
+                         showMessage('list-message', 'No image metadata found.');
+                         return;
+                    }
+                    imageInfoList.forEach(imageInfo => {
+                        if (imageInfo.url && imageInfo.name) { // Check if data is valid
+                            const listItem = document.createElement('li');
+                            const link = document.createElement('a');
+                            link.href = '#'; // Prevent page jump, use JS for action
+                            link.textContent = `${imageInfo.name} (${(imageInfo.size / 1024).toFixed(1)} KB)`;
+                            link.onclick = (e) => {
+                                e.preventDefault(); // Prevent default link behavior
+                                window.open(imageInfo.url, '_blank'); // Open image URL in a new tab
+                            };
+                            // You could also make clicking the link display the image in the 'display-section'
+                            // link.onclick = (e) => { e.preventDefault(); displaySingleImage(imageInfo.url); };
+                            listItem.appendChild(link);
+                            imageList.appendChild(listItem);
+                        }
                     });
                 })
                 .catch(error => {
                     console.error('Error fetching image list:', error);
-                    document.getElementById('image-list').textContent = 'Failed to load image list.';
+                    showMessage('list-message', `Failed to load image list: ${error.message}`, true);
                 });
         }
 
-        // You might call these functions when the page loads or based on user interaction.
-        // For example, to load images when the page loads:
-        // window.onload = retrieveImages;
-        // window.onload = listStoredImages;
+        // Function to display a single image in the display section (optional)
+        /*
+        function displaySingleImage(imageUrl) {
+            const imageContainer = document.getElementById('image-container');
+            imageContainer.innerHTML = ''; // Clear others
+             if (imageUrl) {
+                 const img = document.createElement('img');
+                 img.src = imageUrl;
+                 img.alt = "Selected Image";
+                 img.onerror = () => { img.alt = "Image failed to load"; img.style.border = "1px solid red"; };
+                 img.onclick = () => window.open(imageUrl, '_blank');
+                 imageContainer.appendChild(img);
+                 clearMessage('display-message');
+             } else {
+                  showMessage('display-message', 'Image URL is missing.', true);
+             }
+        }
+        */
+
+        // Load images and list when the page loads
+        window.onload = () => {
+            retrieveImages();
+            listStoredImages();
+        };
+
     </script>
 
 </body>
