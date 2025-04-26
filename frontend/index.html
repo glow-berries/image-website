@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Uploader & Viewer</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #upload-section, #display-section, #list-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .image-container img {
+            max-width: 200px;
+            height: auto;
+            border: 1px solid #eee;
+            border-radius: 3px;
+        }
+
+        #image-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #image-list li {
+            margin-bottom: 5px;
+        }
+
+        #message {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Image Uploader & Viewer</h1>
+
+    <section id="upload-section">
+        <h2>Upload New Image</h2>
+        <input type="file" id="image-upload" accept="image/*">
+        <button onclick="uploadImage()">Upload</button>
+        <p id="upload-message"></p>
+    </section>
+
+    <section id="display-section">
+        <h2>Display Images</h2>
+        <div id="image-container" class="image-container">
+            </div>
+        <p>To display images, you'll need to fetch their URLs from your backend (which interacts with Google Cloud Storage) and dynamically add &lt;img&gt; tags here using JavaScript.</p>
+    </section>
+
+    <section id="list-section">
+        <h2>Stored Images</h2>
+        <ul id="image-list">
+            </ul>
+        <p>This section would typically involve fetching a list of stored image metadata from your backend and displaying it here. Clicking on a link could then display the image in the "Display Images" section.</p>
+    </section>
+
+    <script>
+        function uploadImage() {
+            const fileInput = document.getElementById('image-upload');
+            const file = fileInput.files[0];
+            const uploadMessage = document.getElementById('upload-message');
+
+            if (file) {
+                uploadMessage.textContent = 'Uploading...';
+                // In a real application, you would send this 'file' to your backend
+                // using a fetch or XMLHttpRequest request.
+                // Your backend would then handle the upload to Google Cloud Storage.
+
+                // For this frontend example, we'll simulate a successful upload.
+                setTimeout(() => {
+                    uploadMessage.textContent = `Successfully selected: ${file.name} (Size: ${file.size} bytes). Now, the backend needs to handle the actual upload to Google Cloud Storage.`;
+                    fileInput.value = ''; // Clear the input
+                }, 1500);
+            } else {
+                uploadMessage.textContent = 'Please select an image file.';
+            }
+        }
+
+        // In a real application, this function would fetch the list of image URLs
+        // from your backend and dynamically add <img> tags to the 'image-container' div.
+        function retrieveImages() {
+            // Example of how you might fetch data (replace with your actual backend endpoint)
+            fetch('/api/images') // Replace with your backend API endpoint
+                .then(response => response.json())
+                .then(data => {
+                    const imageContainer = document.getElementById('image-container');
+                    imageContainer.innerHTML = ''; // Clear previous images
+                    data.forEach(imageUrl => {
+                        const img = document.createElement('img');
+                        img.src = imageUrl;
+                        imageContainer.appendChild(img);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching images:', error);
+                    document.getElementById('image-container').textContent = 'Failed to load images.';
+                });
+        }
+
+        // Similarly, this function would fetch a list of stored image metadata
+        // from your backend and populate the 'image-list' ul.
+        function listStoredImages() {
+            // Example of how you might fetch the list (replace with your actual backend endpoint)
+            fetch('/api/list-images') // Replace with your backend API endpoint
+                .then(response => response.json())
+                .then(data => {
+                    const imageList = document.getElementById('image-list');
+                    imageList.innerHTML = ''; // Clear previous list
+                    data.forEach(imageInfo => {
+                        const listItem = document.createElement('li');
+                        const link = document.createElement('a');
+                        link.href = imageInfo.url; // Or a dedicated view page
+                        link.textContent = imageInfo.name || imageInfo.filename;
+                        listItem.appendChild(link);
+                        imageList.appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching image list:', error);
+                    document.getElementById('image-list').textContent = 'Failed to load image list.';
+                });
+        }
+
+        // You might call these functions when the page loads or based on user interaction.
+        // For example, to load images when the page loads:
+        // window.onload = retrieveImages;
+        // window.onload = listStoredImages;
+    </script>
+
+</body>
+</html>
