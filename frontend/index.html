@@ -53,15 +53,31 @@
 
         #image-list li {
             margin-bottom: 5px;
+            display: flex; /* Align link and delete button */
+            justify-content: space-between; /* Space them out */
+            align-items: center; /* Vertically align */
         }
         #image-list li a {
             cursor: pointer;
             text-decoration: underline;
             color: blue;
+            flex-grow: 1; /* Allow link to take up more space */
+        }
+        #image-list li button.delete-btn {
+            background-color: #f44336; /* Red */
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: 10px; /* Space from the link */
         }
 
-
-        #upload-message, #display-message, #list-message {
+        #upload-message, #display-message, #list-message, #delete-message {
             margin-top: 10px;
             font-weight: bold;
         }
@@ -89,19 +105,20 @@
          <button onclick="retrieveImages()">Refresh Displayed Images</button>
         <p id="display-message"></p>
         <div id="image-container" class="image-container">
-            </div>
+        </div>
     </section>
 
     <section id="list-section">
         <h2>Stored Images List</h2>
         <button onclick="listStoredImages()">Refresh Stored List</button>
         <p id="list-message"></p>
+        <p id="delete-message"></p>
         <ul id="image-list">
-            </ul>
+        </ul>
     </section>
 
     <script>
-        const API_BASE_URL = 'http://localhost:5000'; // Your Flask backend URL
+        const API_BASE_URL = 'http://localhost:5000/api'; // Corrected API base URL
 
         function showMessage(elementId, text, isError = false) {
             const el = document.getElementById(elementId);
@@ -114,7 +131,6 @@
              el.textContent = '';
              el.className = '';
         }
-
 
         function uploadImage() {
             const fileInput = document.getElementById('image-upload');
@@ -130,17 +146,15 @@
             const formData = new FormData();
             formData.append('image', file); // Key 'image' must match Flask request.files key
 
-            fetch(`${API_BASE_URL}/api/upload`, {
+            fetch(`${API_BASE_URL}/upload`, {
                 method: 'POST',
                 body: formData, // Send file data
             })
             .then(response => {
                 if (!response.ok) {
-                    // Try to get error message from backend JSON response
                     return response.json().then(err => {
-                         throw new Error(err.error || `HTTP error! status: ${response.status}`);
+                        throw new Error(err.error || `HTTP error! status: ${response.status}`);
                     }).catch(() => {
-                        // Fallback if response is not JSON or has no error field
                         throw new Error(`HTTP error! status: ${response.status}`);
                     });
                 }
@@ -149,7 +163,6 @@
             .then(data => {
                 showMessage('upload-message', data.message || 'Upload successful!');
                 fileInput.value = ''; // Clear the input
-                // Optionally refresh lists/display after successful upload
                 retrieveImages();
                 listStoredImages();
             })
@@ -165,29 +178,29 @@
             showMessage('display-message', 'Loading images...');
             imageContainer.innerHTML = ''; // Clear previous images
 
-            fetch(`${API_BASE_URL}/api/images`) // Use the correct endpoint
+            fetch(`${API_BASE_URL}/images`)
                 .then(response => {
                     if (!response.ok) {
-                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
+                        return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
                     }
                     return response.json();
-                 })
+                })
                 .then(imageUrls => {
                     clearMessage('display-message');
                     if (imageUrls.length === 0) {
-                         showMessage('display-message', 'No images found in storage.');
-                         return;
+                        showMessage('display-message', 'No images found in storage.');
+                        return;
                     }
                     imageUrls.forEach(imageUrl => {
-                        if (imageUrl) { // Check if URL is valid/provided
+                        if (imageUrl) {
                             const img = document.createElement('img');
                             img.src = imageUrl;
-                            img.alt = "Stored Image"; // Add alt text
-                            img.onerror = () => { // Basic error handling for broken images
+                            img.alt = "Stored Image";
+                            img.onerror = () => {
                                 img.alt = "Image failed to load";
                                 img.style.border = "1px solid red";
                             };
-                            img.onclick = () => window.open(imageUrl, '_blank'); // Open full image in new tab
+                            img.onclick = () => window.open(imageUrl, '_blank');
                             imageContainer.appendChild(img);
                         }
                     });
@@ -203,33 +216,39 @@
             const listMessageEl = document.getElementById('list-message');
             showMessage('list-message', 'Loading image list...');
             imageList.innerHTML = ''; // Clear previous list
+            clearMessage('delete-message'); // Clear any previous delete messages
 
-            fetch(`${API_BASE_URL}/api/list-images`) // Use the correct endpoint
+            fetch(`${API_BASE_URL}/list-images`)
                 .then(response => {
-                     if (!response.ok) {
-                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
                     }
                     return response.json();
-                 })
+                })
                 .then(imageInfoList => {
-                     clearMessage('list-message');
+                    clearMessage('list-message');
                     if (imageInfoList.length === 0) {
-                         showMessage('list-message', 'No image metadata found.');
-                         return;
+                        showMessage('list-message', 'No images found.');
+                        return;
                     }
                     imageInfoList.forEach(imageInfo => {
-                        if (imageInfo.url && imageInfo.name) { // Check if data is valid
+                        if (imageInfo.url && imageInfo.name) {
                             const listItem = document.createElement('li');
                             const link = document.createElement('a');
-                            link.href = '#'; // Prevent page jump, use JS for action
+                            link.href = '#';
                             link.textContent = `${imageInfo.name} (${(imageInfo.size / 1024).toFixed(1)} KB)`;
                             link.onclick = (e) => {
-                                e.preventDefault(); // Prevent default link behavior
-                                window.open(imageInfo.url, '_blank'); // Open image URL in a new tab
+                                e.preventDefault();
+                                window.open(imageInfo.url, '_blank');
                             };
-                            // You could also make clicking the link display the image in the 'display-section'
-                            // link.onclick = (e) => { e.preventDefault(); displaySingleImage(imageInfo.url); };
+
+                            const deleteButton = document.createElement('button');
+                            deleteButton.textContent = 'Delete';
+                            deleteButton.className = 'delete-btn';
+                            deleteButton.onclick = () => deleteImage(imageInfo.name); // Use the filename to delete
+
                             listItem.appendChild(link);
+                            listItem.appendChild(deleteButton);
                             imageList.appendChild(listItem);
                         }
                     });
@@ -240,31 +259,36 @@
                 });
         }
 
-        // Function to display a single image in the display section (optional)
-        /*
-        function displaySingleImage(imageUrl) {
-            const imageContainer = document.getElementById('image-container');
-            imageContainer.innerHTML = ''; // Clear others
-             if (imageUrl) {
-                 const img = document.createElement('img');
-                 img.src = imageUrl;
-                 img.alt = "Selected Image";
-                 img.onerror = () => { img.alt = "Image failed to load"; img.style.border = "1px solid red"; };
-                 img.onclick = () => window.open(imageUrl, '_blank');
-                 imageContainer.appendChild(img);
-                 clearMessage('display-message');
-             } else {
-                  showMessage('display-message', 'Image URL is missing.', true);
-             }
+        function deleteImage(filename) {
+            const deleteMessageEl = document.getElementById('delete-message');
+            if (confirm(`Are you sure you want to delete '${filename}'?`)) {
+                showMessage('delete-message', `Deleting '${filename}'...`);
+                fetch(`${API_BASE_URL}/delete-image/${filename}`, {
+                    method: 'DELETE',
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showMessage('delete-message', data.message || `Successfully deleted '${filename}'.`);
+                    listStoredImages(); // Refresh the list after deletion
+                    retrieveImages(); // Refresh the displayed images
+                })
+                .catch(error => {
+                    console.error('Error deleting image:', error);
+                    showMessage('delete-message', `Failed to delete '${filename}': ${error.message}`, true);
+                });
+            }
         }
-        */
 
         // Load images and list when the page loads
         window.onload = () => {
             retrieveImages();
             listStoredImages();
         };
-
     </script>
 
 </body>

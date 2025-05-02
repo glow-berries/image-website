@@ -1,10 +1,12 @@
 import os
-import datetime # Ensure datetime is imported
+import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from google.cloud import storage
 from dotenv import load_dotenv
 import logging
+
+FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 
 # --- Configuration ---
 load_dotenv()
@@ -35,8 +37,13 @@ except Exception as e:
 
 @app.route('/')
 def serve_index():
-    """Serves the index.html file."""
-    return send_from_directory('.', 'index.html')
+    """Serves the index.html file from the frontend folder."""
+    logging.info(f"Attempting to serve index.html from: {FRONTEND_FOLDER}")
+    try:
+        return send_from_directory(FRONTEND_FOLDER, 'index.html')
+    except Exception as e:
+        logging.error(f"Error serving index.html: {e}")
+        return "Error loading page. Check logs.", 500
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -51,24 +58,15 @@ def upload_file():
 
     if file:
         try:
-            # Consider adding a unique prefix (like UUID) to prevent overwrites
             blob_name = file.filename
             blob = bucket.blob(blob_name)
-
-            # Upload the file stream
             blob.upload_from_file(file.stream, content_type=file.content_type)
             logging.info(f"File {blob_name} uploaded successfully to {BUCKET_NAME} (privately).")
-
-            # --- No longer attempting to make public ---
-            # File is uploaded privately. Access is granted via Signed URLs when requested.
-
-            # Return success message without a permanent URL
             return jsonify({
                 "message": f"File '{blob_name}' uploaded successfully (privately).",
                 "filename": blob_name,
-                "url": None # Explicitly state no persistent URL is available here
-            }), 201 # 201 Created
-
+                "url": None
+            }), 201
         except Exception as e:
             logging.error(f"Error uploading file to GCS: {e}")
             return jsonify({"error": f"Failed to upload file: {e}"}), 500
@@ -83,24 +81,18 @@ def get_image_urls():
         blobs = bucket.list_blobs()
         for blob in blobs:
             try:
-                # Generate a signed URL valid for 15 minutes (adjust as needed)
                 signed_url = blob.generate_signed_url(
                     version="v4",
-                    expiration=datetime.timedelta(minutes=15), # URL expires in 15 mins
-                    method="GET" # Allow reading the object
+                    expiration=datetime.timedelta(minutes=15),
+                    method="GET"
                 )
                 urls.append(signed_url)
             except Exception as e_sign:
-                # Log error if signing fails (e.g., missing Service Account Token Creator role)
                 logging.error(f"Could not generate signed URL for {blob.name}: {e_sign}. Check IAM permissions.")
-                # Optionally append a placeholder or skip this blob
-                # urls.append(None) # Or just skip by doing nothing here
-
         return jsonify(urls), 200
     except Exception as e:
         logging.error(f"Error listing blobs or generating URLs: {e}")
         return jsonify({"error": f"Failed to retrieve image URLs: {e}"}), 500
-
 
 @app.route('/api/list-images', methods=['GET'])
 def list_image_metadata():
@@ -109,9 +101,8 @@ def list_image_metadata():
     try:
         blobs = bucket.list_blobs()
         for blob in blobs:
-            signed_url = None # Initialize url as None for each blob
+            signed_url = None
             try:
-                # Generate a signed URL valid for 15 minutes
                 signed_url = blob.generate_signed_url(
                     version="v4",
                     expiration=datetime.timedelta(minutes=15),
@@ -119,23 +110,30 @@ def list_image_metadata():
                 )
             except Exception as e_sign:
                 logging.error(f"Could not generate signed URL for {blob.name} in metadata list: {e_sign}. Check IAM permissions.")
-                # Keep signed_url as None if generation fails
 
-            # Add metadata to the list, including the signed URL (which might be None if signing failed)
             image_info_list.append({
                 "name": blob.name,
                 "filename": blob.name,
-                "url": signed_url, # Use the generated (or None) Signed URL
+                "url": signed_url,
                 "size": blob.size,
                 "updated": blob.updated.isoformat() if blob.updated else None
             })
-
-        # Note: The frontend JS should ideally check if the url is valid before using it
         return jsonify(image_info_list), 200
     except Exception as e:
         logging.error(f"Error listing blob metadata: {e}")
         return jsonify({"error": f"Failed to retrieve image list: {e}"}), 500
 
+@app.route('/api/delete-image/<filename>', methods=['DELETE'])
+def delete_image(filename):
+    """Deletes an image from the GCS bucket."""
+    try:
+        blob = bucket.blob(filename)
+        blob.delete()
+        logging.info(f"File {filename} deleted successfully from {BUCKET_NAME}")
+        return jsonify({"message": f"File '{filename}' deleted successfully."}), 200
+    except Exception as e:
+        logging.error(f"Error deleting file {filename} from GCS: {e}")
+        return jsonify({"error": f"Failed to delete file '{filename}': {e}"}), 500
 
 # --- Run the App ---
 if __name__ == '__main__':
