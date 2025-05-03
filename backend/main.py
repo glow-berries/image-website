@@ -5,32 +5,34 @@ from flask_cors import CORS
 from google.cloud import storage
 from dotenv import load_dotenv
 import logging
+import sys
 
 FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 
 # --- Configuration ---
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
-SERVICE_ACCOUNT_KEY_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
 BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 
-if not SERVICE_ACCOUNT_KEY_PATH or not BUCKET_NAME:
-    logging.error("Error: GOOGLE_APPLICATION_CREDENTIALS or GCS_BUCKET_NAME not set in .env")
+if not BUCKET_NAME:
+    logger.error("Error: GCS_BUCKET_NAME not set in .env")
     exit(1)
 
 # --- Initialize Flask App and GCS Client ---
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='')
 CORS(app)
 
 try:
-    storage_client = storage.Client.from_service_account_json(SERVICE_ACCOUNT_KEY_PATH)
+    storage_client = storage.Client()  # Authenticates using the Cloud Run service identity
     bucket = storage_client.bucket(BUCKET_NAME)
-    logging.info(f"Successfully connected to GCS bucket: {BUCKET_NAME}")
-except FileNotFoundError:
-    logging.error(f"Error: Service account key file not found at {SERVICE_ACCOUNT_KEY_PATH}")
-    exit(1)
+    logger.info(f"Successfully connected to GCS bucket: {BUCKET_NAME}")
 except Exception as e:
-    logging.error(f"Error initializing Google Cloud Storage client: {e}")
+    logger.error(f"Error initializing Google Cloud Storage client: {e}")
     exit(1)
 
 # --- API Routes ---
@@ -38,11 +40,11 @@ except Exception as e:
 @app.route('/')
 def serve_index():
     """Serves the index.html file from the frontend folder."""
-    logging.info(f"Attempting to serve index.html from: {FRONTEND_FOLDER}")
+    logger.info(f"Attempting to serve index.html from: {FRONTEND_FOLDER}")
     try:
         return send_from_directory(FRONTEND_FOLDER, 'index.html')
     except Exception as e:
-        logging.error(f"Error serving index.html: {e}")
+        logger.error(f"Error serving index.html: {e}")
         return "Error loading page. Check logs.", 500
 
 @app.route('/api/upload', methods=['POST'])
@@ -61,14 +63,14 @@ def upload_file():
             blob_name = file.filename
             blob = bucket.blob(blob_name)
             blob.upload_from_file(file.stream, content_type=file.content_type)
-            logging.info(f"File {blob_name} uploaded successfully to {BUCKET_NAME} (privately).")
+            logger.info(f"File {blob_name} uploaded successfully to {BUCKET_NAME} (privately).")
             return jsonify({
                 "message": f"File '{blob_name}' uploaded successfully (privately).",
                 "filename": blob_name,
                 "url": None
             }), 201
         except Exception as e:
-            logging.error(f"Error uploading file to GCS: {e}")
+            logger.error(f"Error uploading file to GCS: {e}")
             return jsonify({"error": f"Failed to upload file: {e}"}), 500
     else:
         return jsonify({"error": "An unexpected error occurred"}), 500
@@ -88,10 +90,10 @@ def get_image_urls():
                 )
                 urls.append(signed_url)
             except Exception as e_sign:
-                logging.error(f"Could not generate signed URL for {blob.name}: {e_sign}. Check IAM permissions.")
+                logger.error(f"Could not generate signed URL for {blob.name}: {e_sign}. Check IAM permissions.")
         return jsonify(urls), 200
     except Exception as e:
-        logging.error(f"Error listing blobs or generating URLs: {e}")
+        logger.error(f"Error listing blobs or generating URLs: {e}")
         return jsonify({"error": f"Failed to retrieve image URLs: {e}"}), 500
 
 @app.route('/api/list-images', methods=['GET'])
@@ -109,7 +111,7 @@ def list_image_metadata():
                     method="GET"
                 )
             except Exception as e_sign:
-                logging.error(f"Could not generate signed URL for {blob.name} in metadata list: {e_sign}. Check IAM permissions.")
+                logger.error(f"Could not generate signed URL for {blob.name} in metadata list: {e_sign}. Check IAM permissions.")
 
             image_info_list.append({
                 "name": blob.name,
@@ -120,7 +122,7 @@ def list_image_metadata():
             })
         return jsonify(image_info_list), 200
     except Exception as e:
-        logging.error(f"Error listing blob metadata: {e}")
+        logger.error(f"Error listing blob metadata: {e}")
         return jsonify({"error": f"Failed to retrieve image list: {e}"}), 500
 
 @app.route('/api/delete-image/<filename>', methods=['DELETE'])
@@ -129,10 +131,10 @@ def delete_image(filename):
     try:
         blob = bucket.blob(filename)
         blob.delete()
-        logging.info(f"File {filename} deleted successfully from {BUCKET_NAME}")
+        logger.info(f"File {filename} deleted successfully from {BUCKET_NAME}")
         return jsonify({"message": f"File '{filename}' deleted successfully."}), 200
     except Exception as e:
-        logging.error(f"Error deleting file {filename} from GCS: {e}")
+        logger.error(f"Error deleting file {filename} from GCS: {e}")
         return jsonify({"error": f"Failed to delete file '{filename}': {e}"}), 500
 
 # --- Run the App ---

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Uploader & Viewer</title>
     <style>
-        /* Your CSS styles remain the same */
+        /* CSS styles */
         body {
             font-family: sans-serif;
             margin: 20px;
@@ -87,6 +87,11 @@
         .success {
             color: green;
         }
+        .warning {
+            color: orange; /* Or any color you prefer for warnings */
+            font-weight: bold;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -95,6 +100,7 @@
 
     <section id="upload-section">
         <h2>Upload New Image</h2>
+        <p class="warning">**Warning: All uploaded images will be publicly visible to everyone who uses this website.**</p>
         <input type="file" id="image-upload" accept="image/*">
         <button onclick="uploadImage()">Upload</button>
         <p id="upload-message"></p>

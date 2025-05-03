@@ -1,0 +1,5 @@
+Flask
+Flask-CORS
+google-cloud-storage
+python-dotenv
+gunicorn
