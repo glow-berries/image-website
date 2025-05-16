@@ -9,6 +9,6 @@ COPY backend .
 
 WORKDIR /app
 
-COPY frontend .
+COPY frontend ./frontend
 
 CMD ["gunicorn", "--workers", "3", "--threads", "2", "--timeout", "0", "backend.main:app", "-b", "0.0.0.0:8080"]

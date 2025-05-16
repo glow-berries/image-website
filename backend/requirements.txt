@@ -1,5 +1,6 @@
-Flask
-Flask-CORS
-google-cloud-storage
-python-dotenv
-gunicorn
+Flask>=2.0.0,<3.0.0
+Flask-CORS>=3.0.0,<4.0.0
+google-cloud-storage>=2.0.0,<3.0.0
+gunicorn>=20.0.0,<21.0.0
+google-auth>=2.0.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0

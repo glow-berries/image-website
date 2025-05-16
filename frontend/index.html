@@ -124,7 +124,7 @@
     </section>
 
     <script>
-        const API_BASE_URL = 'http://localhost:5000/api'; // Corrected API base URL
+        const API_BASE_URL = ''; // Using relative URLs for API calls
 
         function showMessage(elementId, text, isError = false) {
             const el = document.getElementById(elementId);
@@ -152,7 +152,7 @@
             const formData = new FormData();
             formData.append('image', file); // Key 'image' must match Flask request.files key
 
-            fetch(`${API_BASE_URL}/upload`, {
+            fetch(`${API_BASE_URL}/api/upload`, {
                 method: 'POST',
                 body: formData, // Send file data
             })
@@ -184,7 +184,7 @@
             showMessage('display-message', 'Loading images...');
             imageContainer.innerHTML = ''; // Clear previous images
 
-            fetch(`${API_BASE_URL}/images`)
+            fetch(`/api/images`)
                 .then(response => {
                     if (!response.ok) {
                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
@@ -224,7 +224,7 @@
             imageList.innerHTML = ''; // Clear previous list
             clearMessage('delete-message'); // Clear any previous delete messages
 
-            fetch(`${API_BASE_URL}/list-images`)
+            fetch(`/api/list-images`)
                 .then(response => {
                     if (!response.ok) {
                         return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
@@ -269,7 +269,7 @@
             const deleteMessageEl = document.getElementById('delete-message');
             if (confirm(`Are you sure you want to delete '${filename}'?`)) {
                 showMessage('delete-message', `Deleting '${filename}'...`);
-                fetch(`${API_BASE_URL}/delete-image/${filename}`, {
+                fetch(`/api/delete-image/${filename}`, {
                     method: 'DELETE',
                 })
                 .then(response => {
